@@ -16,6 +16,8 @@ from collections import defaultdict
 from flask_wtf import FlaskForm
 import logging
 from logging.handlers import RotatingFileHandler
+from sqlalchemy import create_engine
+from sqlalchemy_utils import database_exists, create_database
 
 app = Flask(__name__)
 # Use environment variable for secret key
@@ -348,7 +350,10 @@ def reset_rate_limit(ip, action):
 # Database configuration
 if os.environ.get('FLASK_ENV') == 'production':
     # Use PostgreSQL in production
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+    db_url = os.environ.get('DATABASE_URL')
+    if db_url.startswith('postgres://'):
+        db_url = db_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 else:
     # Use SQLite in development
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
@@ -365,7 +370,22 @@ if os.environ.get('FLASK_ENV') == 'production':
     app.logger.setLevel(logging.INFO)
     app.logger.info('Application startup')
 
+def init_db():
+    try:
+        db_url = os.environ.get('DATABASE_URL')
+        if db_url.startswith('postgres://'):
+            db_url = db_url.replace('postgres://', 'postgresql://', 1)
+        
+        engine = create_engine(db_url)
+        if not database_exists(engine.url):
+            create_database(engine.url)
+        
+        db.create_all()
+        print("Database initialized successfully")
+    except Exception as e:
+        print(f"Error initializing database: {str(e)}")
+
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
+        init_db()  # Initialize database tables
     app.run(debug=True) 
