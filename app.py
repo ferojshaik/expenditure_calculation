@@ -19,29 +19,49 @@ from logging.handlers import RotatingFileHandler
 from sqlalchemy import create_engine
 from sqlalchemy_utils import database_exists, create_database
 
-app = Flask(__name__)
-# Use environment variable for secret key
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///users.db')
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # Session expires after 30 minutes
-app.config['SESSION_PROTECTION'] = 'strong'
-app.config['REMEMBER_COOKIE_SECURE'] = True  # Only send cookies over HTTPS
-app.config['REMEMBER_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access to cookies
-app.config['SESSION_COOKIE_SECURE'] = True
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-db = SQLAlchemy(app)
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
+# Initialize app with error handling
+def create_app():
+    app = Flask(__name__)
+    
+    # Configuration
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
+    if os.environ.get('FLASK_ENV') == 'production':
+        db_url = os.environ.get('DATABASE_URL')
+        if db_url.startswith('postgres://'):
+            db_url = db_url.replace('postgres://', 'postgresql://', 1)
+        app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+    else:
+        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
+    
+    # Initialize extensions
+    db.init_app(app)
+    login_manager.init_app(app)
+    csrf.init_app(app)
+    
+    with app.app_context():
+        db.create_all()  # Create tables
+        
+    return app
+
+# First create the extensions without app
+db = SQLAlchemy()
+login_manager = LoginManager()
+login_manager.login_view = 'login'
+csrf = CSRFProtect()
+
+# Create the app
+app = create_app()
+
+# Then initialize Limiter and Talisman with the app
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
     default_limits=["200 per day", "50 per hour"]
 )
-
-csrf = CSRFProtect(app)
 
 Talisman(app, 
     content_security_policy={
@@ -372,18 +392,50 @@ if os.environ.get('FLASK_ENV') == 'production':
 
 def init_db():
     try:
-        db_url = os.environ.get('DATABASE_URL')
-        if db_url.startswith('postgres://'):
-            db_url = db_url.replace('postgres://', 'postgresql://', 1)
-        
-        engine = create_engine(db_url)
-        if not database_exists(engine.url):
-            create_database(engine.url)
-        
-        db.create_all()
-        print("Database initialized successfully")
+        with app.app_context():
+            # For development
+            if os.environ.get('FLASK_ENV') != 'production':
+                db.create_all()
+                return
+
+            # For production
+            db_url = os.environ.get('DATABASE_URL')
+            if not db_url:
+                raise Exception("DATABASE_URL not set in production")
+
+            if db_url.startswith('postgres://'):
+                db_url = db_url.replace('postgres://', 'postgresql://', 1)
+            
+            engine = create_engine(db_url)
+            if not database_exists(engine.url):
+                create_database(engine.url)
+            
+            db.create_all()
+            app.logger.info("Database initialized successfully")
     except Exception as e:
-        print(f"Error initializing database: {str(e)}")
+        app.logger.error(f"Error initializing database: {str(e)}")
+        raise
+
+    @app.before_first_request
+    def initialize():
+        try:
+            init_db()
+        except Exception as e:
+            app.logger.error(f"Failed to initialize database: {str(e)}")
+            
+    return app
+
+app = create_app()
+
+@app.errorhandler(500)
+def internal_error(error):
+    app.logger.error(f'Server Error: {error}')
+    return render_template('error.html'), 500
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    app.logger.error(f'Unhandled Exception: {str(e)}')
+    return render_template('error.html'), 500
 
 if __name__ == '__main__':
     with app.app_context():
