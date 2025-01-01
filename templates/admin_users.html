@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin - Users</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+        .user-list {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .user-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .user-item:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Registered Users</h1>
+    <div class="user-list">
+        {% for user in users %}
+        <div class="user-item">
+            <p>Username: {{ user.username }}</p>
+            <p>ID: {{ user.id }}</p>
+            <p>Failed Login Attempts: {{ user.failed_login_attempts }}</p>
+            {% if user.last_failed_login %}
+            <p>Last Failed Login: {{ user.last_failed_login }}</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    <p><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
+</body>
+</html> 

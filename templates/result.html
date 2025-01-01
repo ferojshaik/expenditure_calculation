@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Transaction Results</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .results {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .transaction {
+            margin: 10px 0;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .debit {
+            color: #d00;
+        }
+        .credit {
+            color: #0a0;
+        }
+        .amount {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Transaction Results</h1>
+    <div class="results">
+        <h2>Summary</h2>
+        <p>Total Debit: <span class="amount debit">₹{{ transactions|selectattr('type', 'equalto', 'debit')|sum(attribute='amount') }}</span></p>
+        <p>Total Credit: <span class="amount credit">₹{{ transactions|selectattr('type', 'equalto', 'credit')|sum(attribute='amount') }}</span></p>
+        
+        <h3>Debit Transactions:</h3>
+        {% for transaction in transactions if transaction.type == 'debit' %}
+        <div class="transaction">
+            <div>{{ transaction.description }}</div>
+            <div class="amount debit">₹{{ transaction.amount }}</div>
+        </div>
+        {% endfor %}
+        
+        <h3>Credit Transactions:</h3>
+        {% for transaction in transactions if transaction.type == 'credit' %}
+        <div class="transaction">
+            <div>{{ transaction.description }}</div>
+            <div class="amount credit">₹{{ transaction.amount }}</div>
+        </div>
+        {% endfor %}
+        
+        <p><a href="/">Back to Upload</a></p>
+    </div>
+</body>
+</html> 
